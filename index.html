@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0;font-size:14px}[hidden]{display:none!important}</style>
+<title>TriremeScope</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a chart-room console. Sea map on the left, the ADAPT ledger on the right, latency trace and site controls below. */
+:root{
+  --bg:#eef2f4; --panel:#fbfcfc; --ink:#14212b; --ink-2:#4a5a66; --ink-3:#7d8b95;
+  --line:#d3dce1; --sea:#e3eaee; --grat:#cdd8de;
+  --thr:#1f6f8b; --thr-soft:#cfe5ee; --light:#9aa9b3;
+  --fence:#c97a0a; --crash:#8a949b; --bad:#c43c3c; --accept:#6250d6; --commit:#9aa7b0; --reseat:#c97a0a;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#6250d6;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c151b; --panel:#111e26; --ink:#e3ebef; --ink-2:#a8b8c2; --ink-3:#71838f;
+  --line:#22343f; --sea:#0f1c24; --grat:#1c2d38;
+  --thr:#4aa6c6; --thr-soft:#16394a; --light:#5b6d79;
+  --fence:#e59a2e; --crash:#56636c; --bad:#e66767; --accept:#9085e9; --commit:#4f606b; --reseat:#e59a2e;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#2f9d2f; --s7:#9085e9;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c151b; --panel:#111e26; --ink:#e3ebef; --ink-2:#a8b8c2; --ink-3:#71838f;
+  --line:#22343f; --sea:#0f1c24; --grat:#1c2d38;
+  --thr:#4aa6c6; --thr-soft:#16394a; --light:#5b6d79;
+  --fence:#e59a2e; --crash:#56636c; --bad:#e66767; --accept:#9085e9; --commit:#4f606b; --reseat:#e59a2e;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#2f9d2f; --s7:#9085e9;
+  color-scheme:dark}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-display);font-size:14px;line-height:1.45}
+.wrap{max-width:1360px;margin:0 auto;padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
+h1{font-size:28px;font-weight:800;font-stretch:72%;letter-spacing:.01em;margin:0;text-wrap:balance}
+.sub{color:var(--ink-2);max-width:72ch;margin:0}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.toolbar .grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:600}
+button,select{font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--thr)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--thr);outline-offset:2px}
+button.on{background:var(--thr);border-color:var(--thr);color:var(--panel)}
+button.primary{font-weight:700;min-width:84px}
+input[type=range]{accent-color:var(--thr)}
+.main{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:14px}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+.card h2{font-size:13px;font-weight:700;font-stretch:85%;text-transform:uppercase;letter-spacing:.08em;margin:0 0 8px;color:var(--ink-2)}
+.mapbox{position:relative}
+#map{width:100%;display:block;border-radius:6px;background:var(--sea);touch-action:manipulation}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.legend i.sq{border-radius:2px}
+.pop{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;display:grid;gap:6px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:5;min-width:150px}
+.pop[hidden]{display:none}
+.pop .t{font-weight:700;font-size:13px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.stat{border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.stat .v{font-family:var(--f-mono);font-size:18px;font-weight:600}
+.stat .k{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.alc{display:grid;gap:5px;margin:6px 0 10px}
+.alcrow{display:grid;grid-template-columns:118px minmax(0,1fr) 74px;gap:8px;align-items:center;font-size:12px}
+.alcrow .bar{height:12px;border-radius:0 4px 4px 0;background:var(--light);min-width:2px}
+.alcrow.cur .bar{background:var(--ink-2)}
+.alcrow.best .bar{background:var(--thr)}
+.alcrow .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.alcrow .num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.meter{height:14px;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--bg);position:relative}
+.meter>div{height:100%;background:var(--fence);width:0}
+.conds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;font-size:12px;margin-top:8px}
+.cond::before{content:"○ ";color:var(--ink-3)}
+.cond.ok::before{content:"● ";color:var(--thr)}
+.cond.ok{color:var(--ink)}
+.cond{color:var(--ink-3)}
+.verdict{margin-top:8px;font-size:13px;padding:6px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--line)}
+.log{font-family:var(--f-mono);font-size:11.5px;height:150px;overflow:auto;border-top:1px solid var(--line);padding-top:6px;margin-top:8px;color:var(--ink-2)}
+.log div{white-space:pre-wrap}
+.log .rs{color:var(--fence)}
+.log .cr{color:var(--bad)}
+.lower{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:14px}
+@media (max-width:980px){.lower{grid-template-columns:minmax(0,1fr)}}
+#lat{width:100%;display:block;height:220px}
+.sites{display:grid;gap:6px}
+.site{display:grid;grid-template-columns:14px 92px minmax(0,1fr) 46px auto auto;gap:8px;align-items:center;font-size:13px}
+.site .sw{width:12px;height:12px;border-radius:3px}
+.site input{width:100%}
+.site button{padding:3px 8px;font-size:12px}
+.site.dead{opacity:.55}
+.note{font-size:12px;color:var(--ink-3);max-width:90ch}
+.note b{color:var(--ink-2)}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;display:none;z-index:4;white-space:nowrap}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.site{grid-template-columns:14px 72px minmax(0,1fr) 40px;}.site .b2{grid-column:2/4}.alcrow{grid-template-columns:96px minmax(0,1fr) 64px}}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>TriremeScope</h1>
+    <p class="sub">An interactive model of Trireme at <span class="mono">t = 1</span>. Move the hot client and watch ADAPT price the gap, wait out the switching cost, and RESEAT the thranites toward the load.</p>
+  </header>
+
+  <div class="toolbar" role="toolbar" aria-label="Simulation controls">
+    <div class="grp"><button id="play" class="primary">Pause</button><button id="reset">Reset</button></div>
+    <div class="grp"><span class="lbl">Speed</span>
+      <select id="speed" aria-label="Simulation speed">
+        <option value="0.05">0.05×</option><option value="0.1">0.1×</option><option value="0.25" selected>0.25×</option><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option>
+      </select></div>
+    <div class="grp"><span class="lbl">Replicas</span>
+      <select id="nsel" aria-label="Number of replicas"><option value="5" selected>N = 5</option><option value="7">N = 7</option></select></div>
+    <div class="grp"><span class="lbl">Workload</span>
+      <button id="fts" class="on" aria-pressed="true">Follow the sun</button>
+      <button id="uniform">Uniform</button></div>
+    <div class="grp"><span class="lbl">Conflicts</span><input id="conf" type="range" min="0" max="50" value="0" aria-label="Conflict percentage"><span id="confv" class="mono">0%</span></div>
+    <div class="grp"><label class="lbl" for="adaptOn">ADAPT</label><input type="checkbox" id="adaptOn" checked>
+      <label class="lbl" for="showCommit">Commit msgs</label><input type="checkbox" id="showCommit" checked></div>
+  </div>
+
+  <div class="main">
+    <div class="card mapbox">
+      <h2>Replicas and messages <span class="mono" id="clock" style="float:right;font-weight:500;text-transform:none;letter-spacing:0"></span></h2>
+      <canvas id="map" height="460" aria-label="Map of replicas and in-flight messages"></canvas>
+      <div class="pop" id="pop" hidden></div>
+      <div class="legend">
+        <span><i style="background:var(--thr)"></i>Thranite (heavy)</span>
+        <span><i style="background:var(--light)"></i>Light replica</span>
+        <span><i style="border:2px solid var(--fence);background:transparent"></i>Fenced</span>
+        <span><i class="sq" style="background:var(--thr)"></i>PreAccept / OK</span>
+        <span><i class="sq" style="background:var(--accept)"></i>Accept / OK</span>
+        <span><i class="sq" style="background:var(--commit)"></i>Commit</span>
+        <span><i class="sq" style="background:var(--reseat)"></i>RESEAT</span>
+        <span><i class="sq" style="background:var(--bad)"></i>ClosedEpoch</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>ADAPT ledger</h2>
+      <div class="stats">
+        <div class="stat"><div class="v" id="stLat">–</div><div class="k">Mean latency, 2 s</div></div>
+        <div class="stat"><div class="v" id="stFast">–</div><div class="k">Fast path</div></div>
+        <div class="stat"><div class="v" id="stEpoch">0</div><div class="k">Epoch</div></div>
+        <div class="stat"><div class="v" id="stQ">0</div><div class="k">Queued</div></div>
+      </div>
+      <div class="lbl">Aggregated latency cost, ALC(S) in ms waited per s</div>
+      <div class="alc" id="alc"></div>
+      <div class="lbl" style="display:flex;justify-content:space-between"><span>Accumulated gap Σ Δ·dt vs switching cost C</span><span class="mono" id="regv"></span></div>
+      <div class="meter" aria-hidden="true"><div id="regbar"></div></div>
+      <div class="conds" id="conds"></div>
+      <div class="verdict" id="verdict">Measuring client rates.</div>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="lower">
+    <div class="card" style="position:relative">
+      <h2>Client latency per site (1 s rolling mean, ms)</h2>
+      <canvas id="lat" aria-label="Client latency over time per site"></canvas>
+      <div class="tip" id="tip"></div>
+      <div class="legend" id="latLegend"></div>
+    </div>
+    <div class="card">
+      <h2>Client sites</h2>
+      <div class="sites" id="sites"></div>
+      <p class="note" style="margin-top:10px">Rates are commands per second of simulated time. <b>Hot</b> sets that site to 30/s and the rest to 2/s. Click a replica on the map to crash or restart it.</p>
+    </div>
+  </div>
+
+  <p class="note"><b>What this models.</b> Weights follow GenWV(N, 1): two thranites of weight 3(N−2), light replicas of weight 2, fast threshold Φ = 3W/4, slow threshold Ψ = W/2. A coordinator sends PreAccept only to FQ(L)∖{L}; matching replies commit on the fast path, conflicts take an Accept round to weight above Ψ, and a silent FQ member triggers the fallback. ADAPT computes ALC(S) = Σ rate(p)·M̂(p,S) for every pair S of unsuspected replicas and proposes RESEAT once the accumulated gap reaches C, S* has held for 3 heartbeats, and the epoch has lasted T<sub>min</sub>.
+  <b>Simplifications.</b> RTTs are illustrative, not measured; map positions are schematic. Clients sit at their replica and fail over to the nearest live one. Conflicts are a coin flip rather than real key overlap, a replica executes a command when its Commit arrives, suspicion uses a fixed 1 s timeout instead of AdaptPing, a restarted replica rejoins at the latest epoch, and every replica sees the same ADAPT ledger. Demo settings: heartbeat 100 ms, T<sub>min</sub> 2 s, θ = 0.05, initial C from a 300 ms fence.</p>
+</div>
+
+<script>
+(()=>{
+"use strict";
+// ---------- static world ----------
+const SITES=[
+  {name:"Tokyo",x:.90,y:.33},
+  {name:"Singapore",x:.78,y:.72},
+  {name:"Frankfurt",x:.575,y:.46},
+  {name:"London",x:.455,y:.24},
+  {name:"Virginia",x:.27,y:.44},
+  {name:"Oregon",x:.09,y:.28},
+  {name:"São Paulo",x:.33,y:.80},
+];
+// Illustrative inter-site RTTs (ms), symmetric.
+const RTT0=[
+ [0,70,225,210,145,95,255],
+ [70,0,160,170,215,165,320],
+ [225,160,0,15,90,145,200],
+ [210,170,15,0,75,135,185],
+ [145,215,90,75,0,65,115],
+ [95,165,145,135,65,0,175],
+ [255,320,200,185,115,175,0]];
+const FTS_ORDER=[0,2,4]; // Tokyo -> Frankfurt -> Virginia
+const HB=100, CONFIRM=3, THETA=0.05, TMIN=2000, LIVE=1000, FENCE0=300, HOT=30, BG=2, CLIENT_TO=1200;
+
+// ---------- state ----------
+let S;
+function genWV(N){const nl=N-2,wt=3*nl;return Array.from({length:N},(_,i)=>i<2?wt:2);}
+function vecFor(N,thr){const nl=N-2,wt=3*nl;return Array.from({length:N},(_,i)=>thr.includes(i)?wt:2);}
+function init(N){
+  const w=genWV(N),W=w.reduce((a,b)=>a+b,0);
+  S={N,now:0,W,PHI:3*W/4,PSI:W/2,
+    epochs:[{w,thr:[0,1],start:0}],
+    reps:Array.from({length:N},(_,i)=>({id:i,alive:true,downAt:-1,epoch:0,fenceTarget:0,queue:[],rateCount:0,rate:0,inst:0})),
+    rates:Array.from({length:N},()=>BG),
+    rtt:RTT0.slice(0,N).map(r=>r.slice(0,N)),
+    heap:[],seq:0,msgs:[],insts:new Map(),
+    lat:Array.from({length:N},()=>[]),
+    done:[],reseatMarks:[],
+    adapt:{sum:0,best:null,cnt:0,lastHB:0,C:null,costs:[],inflight:null,alc:[],reason:"",bypass:false},
+    switchWait:0,log:[],nextArrival:[],fts:{on:true,idx:0,period:8000,last:0},
+  };
+  for(let i=0;i<N;i++)scheduleArrival(i);
+  applyFts(1);
+  log(`Epoch 0: GenWV(${N},1) = (${w.join(", ")}), W = ${W}, Φ = ${S.PHI}, Ψ = ${S.PSI}`);
+}
+// ---------- event queue ----------
+function push(t,fn){const h=S.heap;h.push({t,s:S.seq++,fn});let i=h.length-1;while(i>0){const p=(i-1)>>1;if(lt(h[i],h[p])){[h[i],h[p]]=[h[p],h[i]];i=p}else break}}
+function lt(a,b){return a.t<b.t||(a.t===b.t&&a.s<b.s)}
+function pop(){const h=S.heap,top=h[0],last=h.pop();if(h.length){h[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<h.length&&lt(h[l],h[m]))m=l;if(r<h.length&&lt(h[r],h[m]))m=r;if(m===i)break;[h[i],h[m]]=[h[m],h[i]];i=m}}return top}
+function log(s,cls){S.log.push({t:S.now,s,cls});if(S.log.length>200)S.log.shift();logDirty=true}
+const fmtT=t=>(t/1000).toFixed(2)+"s";
+
+// ---------- helpers ----------
+const wOf=(e)=>S.epochs[e].w;
+const sumW=(e,set)=>{let s=0;for(const r of set)s+=wOf(e)[r];return s};
+function oneWay(a,b){return S.rtt[a][b]/2*(0.92+Math.random()*0.16)}
+function FQ(L,e){
+  const w=wOf(e);const others=[...Array(S.N).keys()].filter(r=>r!==L).sort((a,b)=>w[b]-w[a]||S.rtt[L][a]-S.rtt[L][b]);
+  const q=[L];let s=w[L];for(const r of others){if(s>=S.PHI)break;q.push(r);s+=w[r]}return q;
+}
+function nearestLive(site){let best=-1,bd=1e9;for(const r of S.reps)if(r.alive&&S.rtt[site][r.id]<bd){bd=S.rtt[site][r.id];best=r.id}return best}
+function fenced(R){return R.fenceTarget>R.epoch}
+
+// ---------- clients ----------
+function scheduleArrival(site){
+  const rate=S.rates[site];const gap=rate>0?-Math.log(1-Math.random())/rate*1000:500;
+  push(S.now+gap,()=>{ if(S.rates[site]>0)clientSend(site,S.now); scheduleArrival(site); });
+}
+function clientSend(site,born){
+  const r=nearestLive(site);if(r<0)return;
+  const d=r===site?0:S.rtt[site][r]/2;
+  push(S.now+d,()=>submit(r,{site,born,via:r}));
+}
+function submit(rid,req){
+  const R=S.reps[rid];
+  if(!R.alive){push(S.now+CLIENT_TO,()=>clientSend(req.site,req.born));return}
+  R.rateCount++;
+  if(fenced(R)){req.qAt=S.now;R.queue.push(req);return}
+  open(R,{kind:"cmd",req});
+}
+// ---------- consensus ----------
+function open(R,o){
+  const id=`${R.id}.${++R.inst}`;const e=R.epoch;
+  const I={id,L:R.id,e,kind:o.kind,req:o.req,target:o.target,w:o.w,thr:o.thr,phase:"fast",fq:FQ(R.id,e),ok:new Set([R.id]),acc:new Set([R.id]),closed:false,done:false,conflict:o.kind==="cmd"&&Math.random()<S.conflict,start:S.now,path:"fast",refused:new Set()};
+  S.insts.set(id,I);
+  if(I.kind==="reseat"){R.fenceTarget=Math.max(R.fenceTarget,I.target);log(`R${R.id} proposes RESEAT → {${I.thr.map(n).join(", ")}} (epoch ${I.target})`,"rs")}
+  const to=I.fq.filter(r=>r!==R.id);
+  if(to.length===0){decideAfterPreAccept(I);return}
+  for(const r of to)send(R.id,r,"PA",I);
+  const maxR=Math.max(...to.map(r=>S.rtt[R.id][r]));
+  push(S.now+maxR*1.3+120,()=>fallback(I));
+}
+function n(i){return SITES[i].name}
+function send(a,b,type,I,extra){
+  if(!S.reps[a].alive)return;
+  const d=oneWay(a,b);const m={a,b,type,I,t0:S.now,t1:S.now+d,extra};
+  S.msgs.push(m);
+  push(m.t1,()=>deliver(m));
+}
+function deliver(m){
+  const R=S.reps[m.b];const I=m.I;
+  if(!R.alive)return;
+  switch(m.type){
+    case "PA":{
+      if(I.kind!=="reseat"&&(R.epoch>I.e||R.fenceTarget>I.e)){send(R.id,I.L,"CE",I,{target:Math.max(R.epoch,R.fenceTarget)});return}
+      if(I.kind==="reseat")R.fenceTarget=Math.max(R.fenceTarget,I.target);
+      send(R.id,I.L,"PAOK",I);return}
+    case "PAOK":{
+      if(I.done||I.phase==="accept")return;I.ok.add(m.a);
+      if(I.phase==="fast"){if(I.fq.every(r=>I.ok.has(r)))decideAfterPreAccept(I)}
+      else if(I.phase==="fb"){if(sumW(I.e,I.ok)>S.PSI)startAccept(I)}
+      return}
+    case "CE":{
+      if(I.done)return;I.refused.add(m.a);
+      if(I.kind==="cmd"&&!I.closed){
+        I.closed=true;I.done=true;I.path="noop";
+        const L=S.reps[I.L];L.fenceTarget=Math.max(L.fenceTarget,m.extra.target);
+        for(const r of S.reps)if(r.id!==I.L)send(I.L,r.id,"CM",I);
+        const req=I.req;req.qAt=S.now;
+        if(fenced(L))L.queue.push(req);else open(L,{kind:"cmd",req});
+      }
+      return}
+    case "AC":send(R.id,I.L,"ACOK",I);return;
+    case "ACOK":{if(I.done)return;I.acc.add(m.a);if(sumW(I.e,I.acc)>S.PSI)commit(I);return}
+    case "CM":onCommit(R,I);return;
+  }
+}
+function decideAfterPreAccept(I){
+  if(I.done)return;
+  if(I.conflict){I.path="slow";startAccept(I)}else{commit(I)}
+}
+function startAccept(I){
+  I.phase="accept";
+  for(const r of S.reps)if(r.id!==I.L)send(I.L,r.id,"AC",I);
+}
+function fallback(I){
+  if(I.done||I.phase!=="fast")return;
+  I.phase="fb";I.path="fallback";
+  const to=S.reps.filter(r=>r.id!==I.L&&!I.ok.has(r.id)).map(r=>r.id);
+  for(const r of to)send(I.L,r,"PA",I);
+  if(sumW(I.e,I.ok)>S.PSI)startAccept(I);
+  push(S.now+600,()=>{ if(!I.done&&I.phase==="fb"&&sumW(I.e,I.ok)<=S.PSI){ I.done=true;I.path="noop";log(`R${I.L}.${I.id.split(".")[1]} commits as no-op (no slow quorum)`,"cr"); if(I.req) push(S.now+CLIENT_TO,()=>clientSend(I.req.site,I.req.born)); } });
+}
+function commit(I){
+  if(I.done)return;I.done=true;
+  for(const r of S.reps)if(r.id!==I.L)send(I.L,r.id,"CM",I);
+  onCommit(S.reps[I.L],I);
+  if(I.kind==="cmd"){
+    const req=I.req;const back=req.via===req.site?0:S.rtt[req.site][req.via]/2;
+    const L=S.now+back-req.born;
+    push(S.now+back,()=>{S.lat[req.site].push([S.now,L]);S.done.push({t:S.now,fast:I.path==="fast"})});
+  }
+}
+function onCommit(R,I){
+  if(I.kind!=="reseat")return;
+  if(R.epoch===I.e&&I.target===I.e+1){
+    if(!S.epochs[I.target])S.epochs[I.target]={w:I.w,thr:I.thr,start:S.now};
+    R.epoch=I.target;
+    if(R.id===I.L){S.adapt.inflight=null;S.reseatMarks.push({t:S.now,thr:I.thr.slice()});log(`Epoch ${I.target}: thranites {${I.thr.map(n).join(", ")}}`,"rs");S.adapt.sum=0;S.adapt.cnt=0;
+      push(S.now+600,()=>{S.adapt.costs.push(S.switchWait);if(S.adapt.costs.length>5)S.adapt.costs.shift();S.switchWait=0});}
+  }else if(R.epoch<I.e){R.epoch=Math.max(R.epoch,I.target);if(!S.epochs[I.target])S.epochs[I.target]={w:I.w,thr:I.thr,start:S.now}}
+  release(R);
+}
+function release(R){
+  if(fenced(R)||!R.alive)return;
+  const q=R.queue;R.queue=[];
+  for(const req of q){S.switchWait+=S.now-req.qAt;open(R,{kind:"cmd",req})}
+}
+// ---------- crash / restart ----------
+function crash(id){
+  const R=S.reps[id];if(!R.alive)return;R.alive=false;R.downAt=S.now;
+  log(`R${id} ${n(id)} crashes`,"cr");
+  for(const req of R.queue)push(S.now+CLIENT_TO,()=>clientSend(req.site,req.born));R.queue=[];
+  for(const I of S.insts.values())if(I.L===id&&!I.done&&I.kind!=="reseat"){I.done=true;I.path="lost";if(I.req)push(S.now+CLIENT_TO,()=>clientSend(I.req.site,I.req.born))}
+  for(const I of S.insts.values())if(I.L===id&&I.kind==="reseat"&&!I.done)push(S.now+LIVE,()=>recoverReseat(I));
+}
+function recoverReseat(I){
+  const Rr=S.reps.find(r=>r.alive);if(!Rr)return;
+  log(`R${Rr.id} recovers the RESEAT of crashed R${I.L} and commits it`,"rs");
+  I.L=Rr.id;I.done=false;commit(I);
+}
+function restart(id){
+  const R=S.reps[id];if(R.alive)return;R.alive=true;R.downAt=-1;
+  const e=S.epochs.length-1;R.epoch=e;R.fenceTarget=e;
+  log(`R${id} ${n(id)} restarts and rejoins at epoch ${e}`);
+}
+// ---------- ADAPT ----------
+function curEpoch(){return S.epochs.length-1}
+function suspected(id){const R=S.reps[id];return !R.alive&&S.now-R.downAt>=LIVE}
+function M(p,set){const d=set.filter(x=>!suspected(x)).map(x=>x===p?0:S.rtt[p][x]).sort((a,b)=>a-b);return d.length>=2?d[1]:Infinity}
+function ALC(set){let s=0;for(let p=0;p<S.N;p++){if(!S.reps[p].alive)continue;const r=S.reps[p].rate;if(r<=0)continue;s+=r*M(p,set)}return s}
+function adaptTick(){
+  const A=S.adapt;
+  for(const R of S.reps){const inst=R.rateCount/(HB/1000);R.rate=0.5*R.rate+0.5*inst;R.rateCount=0}
+  // drop completed instances
+  if(S.insts.size>4000)for(const [k,I] of S.insts)if(I.done&&S.now-I.start>5000)S.insts.delete(k);
+  const e=curEpoch();const cur=S.epochs[e].thr;
+  const U=S.reps.filter(r=>!suspected(r.id)).map(r=>r.id);
+  const cands=[];for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++)cands.push([U[i],U[j]]);
+  const total=S.reps.reduce((a,r)=>a+(r.alive?r.rate:0),0);
+  const curA=ALC(cur);
+  const scored=cands.map(c=>({c,v:ALC(c)})).sort((a,b)=>a.v-b.v);
+  A.alc=scored;A.curA=curA;
+  const best=scored[0];const key=best?best.c.join(","):"";
+  if(key===A.bestKey)A.cnt++;else{A.cnt=1;A.bestKey=key}
+  A.best=best?best.c:null;
+  const C0=total*(FENCE0/1000)*FENCE0/2;
+  const med=A.costs.length?[...A.costs].sort((a,b)=>a-b)[A.costs.length>>1]:null;
+  A.C=Math.max(med??C0,1);
+  const delta=best?curA-best.v:0;A.delta=delta;
+  const age=S.now-S.epochs[e].start;
+  const curLive=cur.filter(x=>!suspected(x)).length;
+  A.bypass=curLive<2;
+  A.cond={
+    gap:best&&key!==[...cur].sort((a,b)=>a-b).join(",")&&isFinite(curA)?delta/curA>=THETA:A.bypass,
+    reg:A.sum>=A.C,conf:A.cnt>=CONFIRM,tmin:age>=TMIN,fence:!S.reps.some(r=>r.alive&&fenced(r))&&!A.inflight,load:total>0.5,
+  };
+  if(!A.bypass){
+    if(!A.cond.gap||!A.cond.load||!isFinite(delta))A.sum=0;else A.sum+=delta*(HB/1000);
+    A.cond.reg=A.sum>=A.C;
+  }
+  if(!S.adaptOn){A.reason="ADAPT is off. The weight vector stays fixed.";return}
+  if(A.inflight){A.reason="RESEAT in flight. Replicas fence as they learn it.";return}
+  if(A.bypass&&best&&A.cond.fence){propose(best.c,"fewer than c(t) live thranites; bypassing the hold");return}
+  if(!best){A.reason="No candidate placement.";return}
+  if(!A.cond.load){A.reason="No client submissions. Holding.";return}
+  if(!A.cond.gap){A.reason=key===[...cur].sort((a,b)=>a-b).join(",")?"Current thranites already minimise ALC.":"Predicted gain below θ. Holding.";return}
+  if(!A.cond.reg){const hold=(A.C-A.sum)/Math.max(delta,1e-9);A.reason=`Paying the gap: about ${hold.toFixed(2)} s more until it equals C.`;return}
+  if(!A.cond.conf){A.reason="Waiting for S* to stay unchanged for 3 heartbeats.";return}
+  if(!A.cond.tmin){A.reason=`Epoch is younger than T_min (${(age/1000).toFixed(1)} s of 2 s).`;return}
+  if(!A.cond.fence){A.reason="A fence is still active.";return}
+  propose(best.c,`accumulated gap ${Math.round(A.sum)} ≥ C ${Math.round(A.C)}`);
+}
+function propose(thr,why){
+  const A=S.adapt;const L=Math.min(...thr.filter(x=>S.reps[x].alive));
+  if(!isFinite(L))return;
+  const e=curEpoch();const R=S.reps[L];
+  if(R.epoch!==e||fenced(R))return;
+  A.inflight={thr};A.reason=`Proposing RESEAT: ${why}.`;
+  log(`ADAPT: ${why}`,"rs");
+  open(R,{kind:"reseat",target:e+1,w:vecFor(S.N,thr),thr:thr.slice()});
+}
+// ---------- workload ----------
+function setRates(arr){for(let i=0;i<S.N;i++)S.rates[i]=arr[i];renderSites()}
+function makeHot(site){setRates(Array.from({length:S.N},(_,i)=>i===site?HOT:BG))}
+function applyFts(k){S.fts.idx=k;S.fts.last=S.now;makeHot(FTS_ORDER[k%FTS_ORDER.length]);log(`Workload: ${n(FTS_ORDER[k%FTS_ORDER.length])} is hot`)}
+// ---------- main loop ----------
+let playing=true,speed=0.25,lastReal=performance.now(),logDirty=true;
+function step(dtSim){
+  const end=S.now+dtSim;
+  while(S.now<end){
+    const hb=S.adapt.lastHB+HB,stop=Math.min(end,hb);
+    while(S.heap.length&&S.heap[0].t<=stop){const ev=pop();S.now=ev.t;ev.fn()}
+    S.now=stop;
+    if(stop===hb){S.adapt.lastHB=hb;adaptTick();if(S.fts.on&&S.now-S.fts.last>=S.fts.period)applyFts(S.fts.idx+1)}
+  }
+  S.msgs=S.msgs.filter(m=>m.t1>S.now);
+  for(const a of S.lat){while(a.length&&a[0][0]<S.now-30000)a.shift()}
+  while(S.done.length&&S.done[0].t<S.now-2000)S.done.shift();
+}
+function frame(t){
+  const dt=Math.min(t-lastReal,100);lastReal=t;
+  if(playing)step(dt*speed);
+  drawMap();drawLat();updatePanel();
+  requestAnimationFrame(frame);
+}
+// ---------- drawing ----------
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let C={};function readColors(){for(const k of["sea","grat","ink","ink-2","ink-3","thr","thr-soft","light","fence","crash","bad","accept","commit","reseat","panel","line","s1","s2","s3","s4","s5","s6","s7"])C[k]=css("--"+k)}
+const map=document.getElementById("map"),mctx=map.getContext("2d");
+let MW=0,MH=0,DPR=1;
+function sizeCanvas(cv,h){DPR=window.devicePixelRatio||1;const w=cv.clientWidth;cv.width=w*DPR;cv.height=h*DPR;cv.style.height=h+"px";return [w,h]}
+function resize(){const w=map.clientWidth;const h=Math.max(300,Math.min(480,w*0.56));[MW,MH]=sizeCanvas(map,h);const lc=document.getElementById("lat");sizeCanvas(lc,220);readColors()}
+function pos(i){return [SITES[i].x*MW,SITES[i].y*MH]}
+function drawMap(){
+  const c=mctx;c.setTransform(DPR,0,0,DPR,0,0);c.clearRect(0,0,MW,MH);
+  c.strokeStyle=C.grat;c.lineWidth=1;
+  for(let k=1;k<12;k++){const x=k*MW/12;c.beginPath();c.moveTo(x,0);c.lineTo(x,MH);c.stroke()}
+  for(let k=1;k<6;k++){const y=k*MH/6;c.beginPath();c.moveTo(0,y);c.lineTo(MW,y);c.stroke()}
+  const e=curEpoch(),cur=S.epochs[e].thr;
+  // fast-quorum spokes from the hottest live site
+  // messages
+  const showC=document.getElementById("showCommit").checked;
+  for(const m of S.msgs){
+    if(m.t0>S.now)continue;
+    if(m.type==="CM"&&!showC)continue;
+    const f=Math.min(1,(S.now-m.t0)/(m.t1-m.t0));
+    const [x0,y0]=pos(m.a),[x1,y1]=pos(m.b);
+    const x=x0+(x1-x0)*f,y=y0+(y1-y0)*f;
+    let col=C.thr,r=3.2;
+    if(m.I.kind==="reseat")col=C.reseat,r=4.2;
+    else if(m.type==="AC"||m.type==="ACOK")col=C.accept;
+    else if(m.type==="CM")col=C.commit,r=2.2;
+    else if(m.type==="CE")col=C.bad,r=4;
+    c.globalAlpha=m.type==="CM"?.55:.9;
+    c.fillStyle=col;c.beginPath();
+    if(m.type.endsWith("OK")){c.rect(x-r,y-r,2*r,2*r)}else c.arc(x,y,r,0,7);
+    c.fill();
+  }
+  c.globalAlpha=1;
+  // replicas
+  for(const R of S.reps){
+    const [x,y]=pos(R.id);const w=wOf(Math.min(R.epoch,e))[R.id];const isThr=S.epochs[R.epoch]?.thr.includes(R.id);
+    const rad=isThr?22:14;
+    // client heat
+    const rate=S.rates[R.id];
+    const hw=Math.min(44,rate*44/40);
+    c.fillStyle=C[`s${R.id+1}`];c.globalAlpha=.85;
+    roundRect(c,x-30,y+rad+10,hw,6,3);c.fill();c.globalAlpha=1;
+    c.strokeStyle=C.line;c.lineWidth=1;roundRect(c,x-30,y+rad+10,44,6,3);c.stroke();
+    c.fillStyle=C["ink-3"];c.font=`500 10px ${css("--f-mono")}`;c.textAlign="left";
+    c.fillText(`${rate}/s`,x+18,y+rad+16);
+    // node
+    c.beginPath();c.arc(x,y,rad,0,7);
+    c.fillStyle=!R.alive?C.crash:isThr?C.thr:C.light;c.fill();
+    c.lineWidth=2;c.strokeStyle=C.panel;c.stroke();
+    if(R.alive&&fenced(R)){c.beginPath();c.arc(x,y,rad+5,0,7);c.strokeStyle=C.fence;c.lineWidth=3;c.setLineDash([5,4]);c.stroke();c.setLineDash([])}
+    c.fillStyle=C.panel;c.font=`700 ${isThr?14:11}px ${css("--f-mono")}`;c.textAlign="center";c.textBaseline="middle";
+    c.fillText(R.alive?String(w):"✕",x,y+1);
+    c.textBaseline="alphabetic";
+    c.fillStyle=C.ink;c.font=`700 12px ${css("--f-display")}`;
+    c.fillText(`R${R.id} ${SITES[R.id].name}`,x,y-rad-8);
+    if(R.queue.length){c.fillStyle=C.fence;c.font=`600 10px ${css("--f-mono")}`;c.fillText(`${R.queue.length} queued`,x,y+rad+30)}
+  }
+  document.getElementById("clock").textContent=`t = ${fmtT(S.now)}`;
+}
+function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+// latency chart
+const latc=document.getElementById("lat"),lctx=latc.getContext("2d");
+const WIN=30000;let latSeries=[],latYmax=400;
+function rolling(){
+  const out=[];
+  for(let s=0;s<S.N;s++){
+    const a=S.lat[s];const pts=[];let j=0,sum=0,cnt=0,k=0;
+    for(let t=Math.max(0,S.now-WIN);t<=S.now;t+=250){
+      while(j<a.length&&a[j][0]<=t){sum+=a[j][1];cnt++;j++}
+      while(k<j&&a[k][0]<t-1000){sum-=a[k][1];cnt--;k++}
+      pts.push([t,cnt?sum/cnt:null]);
+    }
+    out.push(pts);
+  }
+  return out;
+}
+let latTick=0;
+function drawLat(){
+  const W=latc.clientWidth,H=220,c=lctx;c.setTransform(DPR,0,0,DPR,0,0);c.clearRect(0,0,W,H);
+  if(S.now-latTick>200||!latSeries.length){latSeries=rolling();latTick=S.now}
+  const padL=40,padR=10,padT=10,padB=22,pw=W-padL-padR,ph=H-padT-padB;
+  let mx=100;for(const s of latSeries)for(const p of s)if(p[1]!=null)mx=Math.max(mx,p[1]);
+  latYmax=Math.ceil(mx/100)*100;
+  const t0=S.now-WIN;const X=t=>padL+(t-t0)/WIN*pw,Y=v=>padT+ph-v/latYmax*ph;
+  c.strokeStyle=C.line;c.lineWidth=1;c.fillStyle=C["ink-3"];c.font=`10px ${css("--f-mono")}`;c.textAlign="right";
+  const step=latYmax<=200?50:latYmax<=500?100:200;
+  for(let v=0;v<=latYmax;v+=step){c.beginPath();c.moveTo(padL,Y(v));c.lineTo(W-padR,Y(v));c.stroke();c.fillText(String(v),padL-6,Y(v)+3)}
+  c.textAlign="center";
+  for(let s=Math.ceil(Math.max(0,t0)/5000)*5000;s<=S.now;s+=5000){c.fillText((s/1000)+"s",X(s),H-6)}
+  // reseat marks
+  S.reseatMarks.forEach((r,i)=>{if(r.t<t0)return;c.strokeStyle=C.fence;c.setLineDash([4,3]);c.beginPath();c.moveTo(X(r.t),padT);c.lineTo(X(r.t),padT+ph);c.stroke();c.setLineDash([]);
+    c.fillStyle=C["ink-2"];c.textAlign="left";c.fillText("→ "+r.thr.map(x=>SITES[x].name.slice(0,3)).join("+"),X(r.t)+4,padT+10+(i%3)*12)});
+  c.save();c.beginPath();c.rect(padL,padT,pw,ph);c.clip();
+  latSeries.forEach((pts,s)=>{c.strokeStyle=C[`s${s+1}`];c.lineWidth=2;c.beginPath();let pen=false;for(const [t,v] of pts){if(v==null||t<t0){pen=false;continue}const x=X(t),y=Y(v);if(!pen){c.moveTo(x,y);pen=true}else c.lineTo(x,y)}c.stroke()});
+  c.restore();
+  if(hoverX!=null&&hoverX>padL&&hoverX<W-padR){
+    const t=t0+(hoverX-padL)/pw*WIN;c.strokeStyle=C["ink-3"];c.beginPath();c.moveTo(hoverX,padT);c.lineTo(hoverX,padT+ph);c.stroke();
+    const idx=latSeries[0]?latSeries[0].findIndex(p=>p[0]>=t):-1;
+    const rows=[];latSeries.forEach((pts,s)=>{const p=pts[idx];if(p&&p[1]!=null){rows.push(`<span style="color:${C["s"+(s+1)]}">■</span> ${SITES[s].name} <b class="mono">${Math.round(p[1])}</b> ms`);c.fillStyle=C[`s${s+1}`];c.beginPath();c.arc(hoverX,Y(p[1]),4,0,7);c.fill();c.strokeStyle=C.panel;c.lineWidth=2;c.stroke()}});
+    tip.style.display=rows.length?"block":"none";tip.innerHTML=`<div class="mono">${fmtT(t)}</div>`+rows.join("<br>");
+    tip.style.left=Math.min(hoverX+16,W-170)+"px";tip.style.top="40px";
+  }else tip.style.display="none";
+}
+const tip=document.getElementById("tip");let hoverX=null;
+latc.addEventListener("pointermove",e=>{const r=latc.getBoundingClientRect();hoverX=e.clientX-r.left});
+latc.addEventListener("pointerleave",()=>{hoverX=null});
+// ---------- panel ----------
+let panelTick=-1;
+function updatePanel(){
+  if(Math.abs(S.now-panelTick)<100&&!logDirty)return;panelTick=S.now;
+  const A=S.adapt,e=curEpoch();
+  // stats
+  const recent=[];for(const a of S.lat)for(const p of a)if(p[0]>S.now-2000)recent.push(p[1]);
+  document.getElementById("stLat").textContent=recent.length?Math.round(recent.reduce((a,b)=>a+b,0)/recent.length)+" ms":"–";
+  const f=S.done.length?Math.round(100*S.done.filter(d=>d.fast).length/S.done.length)+"%":"–";
+  document.getElementById("stFast").textContent=f;
+  document.getElementById("stEpoch").textContent=e;
+  document.getElementById("stQ").textContent=S.reps.reduce((a,r)=>a+r.queue.length,0);
+  // ALC bars
+  const cur=[...S.epochs[e].thr].sort((a,b)=>a-b).join(",");
+  const rows=[];const list=A.alc||[];
+  const shown=list.slice(0,4);if(!shown.some(x=>x.c.join(",")===cur)){const cc=list.find(x=>x.c.join(",")===cur);shown.push(cc||{c:S.epochs[e].thr,v:A.curA})}
+  const mx=Math.max(1,...shown.map(x=>isFinite(x.v)?x.v:0));
+  shown.forEach((x,i)=>{const k=x.c.join(",");const isCur=k===cur,isBest=list[0]&&k===list[0].c.join(",");
+    const v=isFinite(x.v)?Math.round(x.v):"∞";
+    rows.push(`<div class="alcrow ${isCur?"cur":""} ${isBest?"best":""}"><span class="nm">${x.c.map(n).join(" + ")}${isCur?" (now)":""}</span><div class="bar" style="width:${isFinite(x.v)?Math.max(1,x.v/mx*100):100}%"></div><span class="num">${v}</span></div>`)});
+  document.getElementById("alc").innerHTML=rows.join("");
+  const pct=A.C?Math.min(100,A.sum/A.C*100):0;
+  document.getElementById("regbar").style.width=pct+"%";
+  document.getElementById("regv").textContent=`${Math.round(A.sum)} / ${Math.round(A.C||0)} ms`;
+  const cd=A.cond||{};
+  const items=[["gap","Δ/ALC ≥ θ"],["reg","Σ ≥ C"],["conf","S* stable 3 HB"],["tmin","Epoch ≥ T_min"],["fence","No fence"],["load","Clients active"]];
+  document.getElementById("conds").innerHTML=items.map(([k,l])=>`<span class="cond ${cd[k]?"ok":""}">${l}</span>`).join("");
+  document.getElementById("verdict").textContent=A.reason||"Measuring client rates.";
+  if(logDirty){const el=document.getElementById("log");el.innerHTML=S.log.slice(-60).map(l=>`<div class="${l.cls||""}">${fmtT(l.t).padStart(7)}  ${l.s}</div>`).join("");el.scrollTop=el.scrollHeight;logDirty=false}
+}
+// sites panel
+function renderSites(){
+  const el=document.getElementById("sites");if(!el)return;
+  if(el.childElementCount!==S.N){
+    el.innerHTML="";
+    for(let i=0;i<S.N;i++){
+      const d=document.createElement("div");d.className="site";d.innerHTML=`<span class="sw" style="background:var(--s${i+1})"></span><span>R${i} ${SITES[i].name}</span><input type="range" id="rate${i}" min="0" max="40" step="1" aria-label="${SITES[i].name} rate"><span class="mono" id="rv${i}"></span><button id="hot${i}">Hot</button><button class="b2" id="cr${i}">Crash</button>`;
+      el.appendChild(d);
+      d.querySelector("input").addEventListener("input",ev=>{stopFts();S.rates[i]=+ev.target.value;renderSites()});
+      d.querySelector(`#hot${i}`).addEventListener("click",()=>{stopFts();makeHot(i);log(`Workload: ${n(i)} is hot`)});
+      d.querySelector(`#cr${i}`).addEventListener("click",()=>{S.reps[i].alive?crash(i):restart(i);renderSites()});
+    }
+  }
+  for(let i=0;i<S.N;i++){
+    const inp=document.getElementById("rate"+i);if(+inp.value!==S.rates[i])inp.value=S.rates[i];
+    document.getElementById("rv"+i).textContent=S.rates[i]+"/s";
+    document.getElementById("cr"+i).textContent=S.reps[i].alive?"Crash":"Restart";
+    el.children[i].classList.toggle("dead",!S.reps[i].alive);
+  }
+  const ll=document.getElementById("latLegend");ll.innerHTML=SITES.slice(0,S.N).map((s,i)=>`<span><i class="sq" style="background:var(--s${i+1})"></i>${s.name}</span>`).join("")+`<span><i class="sq" style="background:var(--fence);height:2px;width:12px;border-radius:0;vertical-align:3px"></i>RESEAT</span>`;
+}
+function stopFts(){if(S.fts.on){S.fts.on=false;setBtn("fts",false)}}
+function setBtn(id,on){const b=document.getElementById(id);b.classList.toggle("on",on);b.setAttribute("aria-pressed",on)}
+// ---------- wiring ----------
+const pb=document.getElementById("play");
+pb.onclick=()=>{playing=!playing;pb.textContent=playing?"Pause":"Play"};
+document.getElementById("reset").onclick=()=>boot(+document.getElementById("nsel").value);
+document.getElementById("speed").onchange=e=>speed=+e.target.value;
+document.getElementById("nsel").onchange=e=>boot(+e.target.value);
+document.getElementById("fts").onclick=()=>{S.fts.on=!S.fts.on;setBtn("fts",S.fts.on);if(S.fts.on)applyFts(S.fts.idx+1)};
+document.getElementById("uniform").onclick=()=>{stopFts();setRates(Array.from({length:S.N},()=>8));log("Workload: uniform, 8/s at every site")};
+const conf=document.getElementById("conf");conf.oninput=()=>{S.conflict=conf.value/100;document.getElementById("confv").textContent=conf.value+"%"};
+document.getElementById("adaptOn").onchange=e=>{S.adaptOn=e.target.checked;log(`ADAPT ${S.adaptOn?"on":"off"}`)};
+// map popover
+const popEl=document.getElementById("pop");
+map.addEventListener("click",ev=>{
+  const r=map.getBoundingClientRect();const x=ev.clientX-r.left,y=ev.clientY-r.top;
+  let hit=-1;for(let i=0;i<S.N;i++){const [px,py]=pos(i);if(Math.hypot(px-x,py-y)<26)hit=i}
+  if(hit<0){popEl.hidden=true;return}
+  const R=S.reps[hit];const isThr=S.epochs[R.epoch]?.thr.includes(hit);
+  popEl.innerHTML=`<div class="t">R${hit} ${SITES[hit].name}</div><div class="mono" style="font-size:11px;color:var(--ink-3)">${isThr?"thranite":"light"} · epoch ${R.epoch}${fenced(R)?" · fenced":""}</div><button id="pc">${R.alive?"Crash":"Restart"}</button><button id="ph">Make hot</button>`;
+  const box=map.parentElement.getBoundingClientRect();
+  popEl.style.left=Math.min(ev.clientX-box.left+8,box.width-170)+"px";popEl.style.top=(ev.clientY-box.top+8)+"px";popEl.hidden=false;
+  popEl.querySelector("#pc").onclick=()=>{R.alive?crash(hit):restart(hit);renderSites();popEl.hidden=true};
+  popEl.querySelector("#ph").onclick=()=>{stopFts();makeHot(hit);log(`Workload: ${n(hit)} is hot`);popEl.hidden=true};
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")popEl.hidden=true});
+function boot(N){
+  document.getElementById("sites").innerHTML="";
+  init(N);S.conflict=conf.value/100;S.adaptOn=document.getElementById("adaptOn").checked;setBtn("fts",true);
+  latSeries=[];renderSites();
+}
+window.addEventListener("resize",resize);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",readColors);
+new MutationObserver(readColors).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+boot(5);resize();
+// warm up so the first frame already shows traffic
+step(1500);
+requestAnimationFrame(t=>{lastReal=t;frame(t)});
+})();
+</script>
+</body>
+</html>
