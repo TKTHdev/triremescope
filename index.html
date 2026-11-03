@@ -134,6 +134,9 @@ input[type=range]{accent-color:var(--thr)}
         <span><i style="background:var(--thr)"></i>Thranite (heavy)</span>
         <span><i style="background:var(--light)"></i>Light replica</span>
         <span><i style="border:2px solid var(--fence);background:transparent"></i>Fenced</span>
+        <span><i class="sq" style="background:var(--s1);width:12px;height:9px"></i>Clients (rate below)</span>
+        <span><i style="background:var(--s1)"></i>Client request</span>
+        <span><i style="border:2px solid var(--s1);background:transparent"></i>Reply</span>
         <span><i class="sq" style="background:var(--thr)"></i>PreAccept / OK</span>
         <span><i class="sq" style="background:var(--accept)"></i>Accept / OK</span>
         <span><i class="sq" style="background:var(--commit)"></i>Commit</span>
@@ -175,7 +178,7 @@ input[type=range]{accent-color:var(--thr)}
   </div>
 
   <p class="note"><b>What this models.</b> Weights follow GenWV(N, 1): two thranites of weight 3(N−2), light replicas of weight 2, fast threshold Φ = 3W/4, slow threshold Ψ = W/2. A coordinator sends PreAccept only to FQ(L)∖{L}; matching replies commit on the fast path, conflicts take an Accept round to weight above Ψ, and a silent FQ member triggers the fallback. ADAPT computes ALC(S) = Σ rate(p)·M̂(p,S) for every pair S of unsuspected replicas and proposes RESEAT once the accumulated gap reaches C, S* has held for 3 heartbeats, and the epoch has lasted T<sub>min</sub>.
-  <b>Simplifications.</b> RTTs are illustrative, not measured; map positions are schematic. Clients sit at their replica and fail over to the nearest live one. Conflicts are a coin flip rather than real key overlap, a replica executes a command when its Commit arrives, suspicion uses a fixed 1 s timeout instead of AdaptPing, a restarted replica rejoins at the latest epoch, and every replica sees the same ADAPT ledger. Demo settings: heartbeat 100 ms, T<sub>min</sub> 2 s, θ = 0.05, initial C from a 300 ms fence.</p>
+  <b>Simplifications.</b> RTTs are illustrative, not measured; map positions are schematic. Clients sit at their replica and fail over to the nearest live one; the local hop costs 0 ms in the model and is drawn over a short fixed time so it stays visible, and a failed-over client's hop to a remote replica is drawn at its modelled one-way delay. Conflicts are a coin flip rather than real key overlap, a replica executes a command when its Commit arrives, suspicion uses a fixed 1 s timeout instead of AdaptPing, a restarted replica rejoins at the latest epoch, and every replica sees the same ADAPT ledger. Demo settings: heartbeat 100 ms, T<sub>min</sub> 2 s, θ = 0.05, initial C from a 300 ms fence.</p>
 </div>
 
 <script>
@@ -201,6 +204,7 @@ const RTT0=[
  [95,165,145,135,65,0,175],
  [255,320,200,185,115,175,0]];
 const FTS_ORDER=[0,2,4]; // Tokyo -> Frankfurt -> Virginia
+const VIS_REAL=220; // on-screen duration (real ms) of a client hop that costs 0 ms in the model
 const HB=100, CONFIRM=3, THETA=0.05, TMIN=2000, LIVE=1000, FENCE0=300, HOT=30, BG=2, CLIENT_TO=1200;
 
 // ---------- state ----------
@@ -214,7 +218,7 @@ function init(N){
     reps:Array.from({length:N},(_,i)=>({id:i,alive:true,downAt:-1,epoch:0,fenceTarget:0,queue:[],rateCount:0,rate:0,inst:0})),
     rates:Array.from({length:N},()=>BG),
     rtt:RTT0.slice(0,N).map(r=>r.slice(0,N)),
-    heap:[],seq:0,msgs:[],insts:new Map(),
+    heap:[],seq:0,msgs:[],cmsgs:[],insts:new Map(),
     lat:Array.from({length:N},()=>[]),
     done:[],reseatMarks:[],
     adapt:{sum:0,best:null,cnt:0,lastHB:0,C:null,costs:[],inflight:null,alc:[],reason:"",bypass:false},
@@ -245,13 +249,19 @@ function fenced(R){return R.fenceTarget>R.epoch}
 // ---------- clients ----------
 function scheduleArrival(site){
   const rate=S.rates[site];const gap=rate>0?-Math.log(1-Math.random())/rate*1000:500;
-  push(S.now+gap,()=>{ if(S.rates[site]>0)clientSend(site,S.now); scheduleArrival(site); });
+  const tArr=S.now+gap;
+  // The local hop costs 0 ms, so its request is drawn ending at the submission instant.
+  const v=rate>0&&S.reps[site].alive?visClient(site,site,"req",Math.max(S.now,tArr-visDur()),tArr):null;
+  push(tArr,()=>{ if(S.rates[site]>0)clientSend(site,S.now,v);else if(v)v.dead=true; scheduleArrival(site); });
 }
-function clientSend(site,born){
-  const r=nearestLive(site);if(r<0)return;
+function clientSend(site,born,v){
+  const r=nearestLive(site);if(r<0){if(v)v.dead=true;return}
   const d=r===site?0:S.rtt[site][r]/2;
+  if(r!==site){if(v)v.dead=true;visClient(site,r,"req",S.now,S.now+d)}
   push(S.now+d,()=>submit(r,{site,born,via:r}));
 }
+function visDur(){return VIS_REAL*speed}
+function visClient(site,r,type,t0,t1){const m={site,r,type,t0,t1,dead:false};S.cmsgs.push(m);return m}
 function submit(rid,req){
   const R=S.reps[rid];
   if(!R.alive){push(S.now+CLIENT_TO,()=>clientSend(req.site,req.born));return}
@@ -329,6 +339,7 @@ function commit(I){
   if(I.kind==="cmd"){
     const req=I.req;const back=req.via===req.site?0:S.rtt[req.site][req.via]/2;
     const L=S.now+back-req.born;
+    visClient(req.site,req.via,"rep",S.now,S.now+Math.max(back,visDur()));
     push(S.now+back,()=>{S.lat[req.site].push([S.now,L]);S.done.push({t:S.now,fast:I.path==="fast"})});
   }
 }
@@ -436,6 +447,7 @@ function step(dtSim){
     if(stop===hb){S.adapt.lastHB=hb;adaptTick();if(S.fts.on&&S.now-S.fts.last>=S.fts.period)applyFts(S.fts.idx+1)}
   }
   S.msgs=S.msgs.filter(m=>m.t1>S.now);
+  S.cmsgs=S.cmsgs.filter(m=>m.t1>S.now&&!m.dead);
   for(const a of S.lat){while(a.length&&a[0][0]<S.now-30000)a.shift()}
   while(S.done.length&&S.done[0].t<S.now-2000)S.done.shift();
 }
@@ -453,13 +465,30 @@ let MW=0,MH=0,DPR=1;
 function sizeCanvas(cv,h){DPR=window.devicePixelRatio||1;const w=cv.clientWidth;cv.width=w*DPR;cv.height=h*DPR;cv.style.height=h+"px";return [w,h]}
 function resize(){const w=map.clientWidth;const h=Math.max(300,Math.min(480,w*0.56));[MW,MH]=sizeCanvas(map,h);const lc=document.getElementById("lat");sizeCanvas(lc,220);readColors()}
 function pos(i){return [SITES[i].x*MW,SITES[i].y*MH]}
+const CL_DX=60;
+// Client cluster beside its replica: to the left, or to the right when the left edge is too close.
+function cpos(i){const [x,y]=pos(i);return [x-CL_DX-12>2?x-CL_DX:x+CL_DX,y]}
+function drawClients(c,x,y,col,hot){
+  // a small terminal: screen, then stand
+  const one=(dx,dy,a)=>{c.globalAlpha=a;c.fillStyle=col;roundRect(c,x+dx-10,y+dy-8,20,14,3);c.fill();
+    c.fillRect(x+dx-4,y+dy+7,8,3);c.globalAlpha=1;c.strokeStyle=C.panel;c.lineWidth=1.5;roundRect(c,x+dx-10,y+dy-8,20,14,3);c.stroke()};
+  if(hot){one(-9,-7,.5);one(9,-7,.5)}
+  one(0,0,1);
+}
 function drawMap(){
   const c=mctx;c.setTransform(DPR,0,0,DPR,0,0);c.clearRect(0,0,MW,MH);
   c.strokeStyle=C.grat;c.lineWidth=1;
   for(let k=1;k<12;k++){const x=k*MW/12;c.beginPath();c.moveTo(x,0);c.lineTo(x,MH);c.stroke()}
   for(let k=1;k<6;k++){const y=k*MH/6;c.beginPath();c.moveTo(0,y);c.lineTo(MW,y);c.stroke()}
   const e=curEpoch(),cur=S.epochs[e].thr;
-  // fast-quorum spokes from the hottest live site
+  // client sites: link to the replica they submit to (the nearest live one), then the client glyphs
+  for(let i=0;i<S.N;i++){
+    const [cx,cy]=cpos(i),r=nearestLive(i);
+    if(r>=0){const [rx,ry]=pos(r);c.strokeStyle=C[`s${i+1}`];c.globalAlpha=r===i?.5:.8;c.lineWidth=1.2;c.setLineDash([3,3]);c.beginPath();c.moveTo(cx,cy);c.lineTo(rx,ry);c.stroke();c.setLineDash([]);c.globalAlpha=1}
+    drawClients(c,cx,cy,C[`s${i+1}`],S.rates[i]>=HOT);
+    c.fillStyle=C["ink-3"];c.font=`500 10px ${css("--f-mono")}`;c.textAlign="center";c.textBaseline="alphabetic";
+    c.fillText(`${S.rates[i]}/s`,cx,cy+24);
+  }
   // messages
   const showC=document.getElementById("showCommit").checked;
   for(const m of S.msgs){
@@ -479,18 +508,21 @@ function drawMap(){
     c.fill();
   }
   c.globalAlpha=1;
+  // client requests (filled) and replies (hollow)
+  for(const m of S.cmsgs){
+    if(m.t0>S.now)continue;
+    const f=Math.min(1,(S.now-m.t0)/Math.max(1e-9,m.t1-m.t0));
+    const [ax,ay]=cpos(m.site),[bx,by]=pos(m.r);
+    const [x0,y0,x1,y1]=m.type==="req"?[ax,ay,bx,by]:[bx,by,ax,ay];
+    const x=x0+(x1-x0)*f,y=y0+(y1-y0)*f;const col=C[`s${m.site+1}`];
+    c.beginPath();c.arc(x,y,4,0,7);
+    if(m.type==="req"){c.fillStyle=col;c.fill();c.strokeStyle=C.panel;c.lineWidth=1;c.stroke()}
+    else{c.fillStyle=C.panel;c.fill();c.strokeStyle=col;c.lineWidth=1.8;c.stroke()}
+  }
   // replicas
   for(const R of S.reps){
     const [x,y]=pos(R.id);const w=wOf(Math.min(R.epoch,e))[R.id];const isThr=S.epochs[R.epoch]?.thr.includes(R.id);
     const rad=isThr?22:14;
-    // client heat
-    const rate=S.rates[R.id];
-    const hw=Math.min(44,rate*44/40);
-    c.fillStyle=C[`s${R.id+1}`];c.globalAlpha=.85;
-    roundRect(c,x-30,y+rad+10,hw,6,3);c.fill();c.globalAlpha=1;
-    c.strokeStyle=C.line;c.lineWidth=1;roundRect(c,x-30,y+rad+10,44,6,3);c.stroke();
-    c.fillStyle=C["ink-3"];c.font=`500 10px ${css("--f-mono")}`;c.textAlign="left";
-    c.fillText(`${rate}/s`,x+18,y+rad+16);
     // node
     c.beginPath();c.arc(x,y,rad,0,7);
     c.fillStyle=!R.alive?C.crash:isThr?C.thr:C.light;c.fill();
